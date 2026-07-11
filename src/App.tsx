@@ -4,6 +4,11 @@
  */
 
 import { useState, useMemo, useRef, useEffect, FormEvent } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { FOOD_DATABASE, FoodItem } from './data/foodDatabase';
+import MealsTab from './components/MealsTab';
+import CoachTab from './components/CoachTab';
+import DashboardTab from './components/DashboardTab';
 import {
   Activity,
   Flame,
@@ -36,7 +41,8 @@ import {
   Calendar,
   Zap,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  Trash2
 } from 'lucide-react';
 
 // Configuration Config arrays to keep token counts compact
@@ -805,6 +811,41 @@ export default function App() {
     };
   });
 
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    return localStorage.getItem('geminiApiKey') || '';
+  });
+  const [testingKey, setTestingKey] = useState(false);
+  const [testStatus, setTestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleTestConnection = async () => {
+    if (!geminiApiKey.trim()) return;
+    setTestingKey(true);
+    setTestStatus(null);
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: "Hello" }]
+            }
+          ]
+        })
+      });
+      
+      if (response.ok) {
+        setTestStatus({ type: 'success', message: 'Connection successful!' });
+      } else {
+        setTestStatus({ type: 'error', message: 'Connection failed. Please check your API key.' });
+      }
+    } catch (err) {
+      setTestStatus({ type: 'error', message: 'Connection failed. Network error.' });
+    } finally {
+      setTestingKey(false);
+    }
+  };
+
   const [caloriesConsumed, setCaloriesConsumed] = useState(() => {
     const stored = localStorage.getItem('caloriesConsumed');
     return stored ? parseInt(stored) : 1840;
@@ -1204,6 +1245,227 @@ export default function App() {
   const [mealInput, setMealInput] = useState('');
   const [scanningStatus, setScanningStatus] = useState<'idle' | 'scanning' | 'ready'>('idle');
   const [scannedResult, setScannedResult] = useState<any | null>(null);
+
+  // Helper to format date to YYYY-MM-DD
+  const formatDateToYYYYMMDD = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // State for active selected meal date (defaults to today)
+  const [selectedMealDate, setSelectedMealDate] = useState(() => formatDateToYYYYMMDD(new Date()));
+
+  // Active view in Meals tab ('tracker' or 'weekly')
+  const [mealsViewMode, setMealsViewMode] = useState<'tracker' | 'weekly'>('tracker');
+
+  // Meal history structure keyed by YYYY-MM-DD
+  const [mealHistory, setMealHistory] = useState<Record<string, any>>(() => {
+    const stored = localStorage.getItem('mealHistory');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error("Failed parsing mealHistory", e);
+      }
+    }
+    return {};
+  });
+
+  // Custom foods saved in localStorage
+  const [customFoods, setCustomFoods] = useState<FoodItem[]>(() => {
+    const stored = localStorage.getItem('customFoods');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error("Failed parsing customFoods", e);
+      }
+    }
+    return [];
+  });
+
+  // Favorite food IDs
+  const [favoriteFoods, setFavoriteFoods] = useState<string[]>(() => {
+    const stored = localStorage.getItem('favoriteFoods');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error("Failed parsing favoriteFoods", e);
+      }
+    }
+    return [];
+  });
+
+  // Recent foods
+  const [recentFoods, setRecentFoods] = useState<any[]>(() => {
+    const stored = localStorage.getItem('recentFoods');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error("Failed parsing recentFoods", e);
+      }
+    }
+    return [];
+  });
+
+  // Add food modal states
+  const [isAddFoodModalOpen, setIsAddFoodModalOpen] = useState(false);
+  const [selectedMealSlot, setSelectedMealSlot] = useState<'breakfast' | 'morningSnack' | 'lunch' | 'eveningSnack' | 'dinner' | null>(null);
+  const [foodSearchQuery, setFoodSearchQuery] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
+  const [selectedFoodForPortion, setSelectedFoodForPortion] = useState<any | null>(null);
+  const [portionMultiplier, setPortionMultiplier] = useState(1.0);
+  const [customPortionInput, setCustomPortionInput] = useState('');
+  const [isCustomFoodFormActive, setIsCustomFoodFormActive] = useState(false);
+
+  // Custom food form inputs
+  const [customFoodName, setCustomFoodName] = useState('');
+  const [customFoodCalories, setCustomFoodCalories] = useState('');
+  const [customFoodProtein, setCustomFoodProtein] = useState('');
+  const [customFoodCarbs, setCustomFoodCarbs] = useState('');
+  const [customFoodFats, setCustomFoodFats] = useState('');
+  const [customFoodFiber, setCustomFoodFiber] = useState('');
+  const [customFoodServingSize, setCustomFoodServingSize] = useState('100');
+  const [customFoodServingUnit, setCustomFoodServingUnit] = useState('g');
+
+  // Custom water intake input
+  const [customWaterInput, setCustomWaterInput] = useState('');
+
+  // Persists to localStorage via useEffects
+  useEffect(() => {
+    localStorage.setItem('mealHistory', JSON.stringify(mealHistory));
+  }, [mealHistory]);
+
+  useEffect(() => {
+    localStorage.setItem('customFoods', JSON.stringify(customFoods));
+  }, [customFoods]);
+
+  useEffect(() => {
+    localStorage.setItem('favoriteFoods', JSON.stringify(favoriteFoods));
+  }, [favoriteFoods]);
+
+  useEffect(() => {
+    localStorage.setItem('recentFoods', JSON.stringify(recentFoods));
+  }, [recentFoods]);
+
+  // Synchronize caloriesConsumed and hydrationConsumed with the selected meal date log
+  useEffect(() => {
+    const todayLog = mealHistory[selectedMealDate] || {
+      breakfast: [],
+      morningSnack: [],
+      lunch: [],
+      eveningSnack: [],
+      dinner: [],
+      water: 0
+    };
+    
+    const mealKeys = ['breakfast', 'morningSnack', 'lunch', 'eveningSnack', 'dinner'] as const;
+    let totalCal = 0;
+    mealKeys.forEach(key => {
+      const list = todayLog[key] || [];
+      list.forEach((item: any) => {
+        totalCal += Math.round(item.calories * item.portionMultiplier);
+      });
+    });
+    
+    setCaloriesConsumed(totalCal);
+    setHydrationConsumed((todayLog.water || 0) / 1000);
+  }, [mealHistory, selectedMealDate]);
+
+  // Helper functions for logging meals
+  const logFoodToMeal = (food: any, slot: 'breakfast' | 'morningSnack' | 'lunch' | 'eveningSnack' | 'dinner', multiplier: number) => {
+    const dateKey = selectedMealDate;
+    
+    const loggedItem = {
+      loggedId: `logged_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      id: food.id || `custom_${Date.now()}`,
+      name: food.name,
+      category: food.category || 'Custom',
+      calories: Number(food.calories),
+      protein: Number(food.protein) || 0,
+      carbs: Number(food.carbs) || 0,
+      fats: Number(food.fats) || 0,
+      fiber: Number(food.fiber) || 0,
+      servingSize: Number(food.servingSize) || 100,
+      servingUnit: food.servingUnit || 'g',
+      portionMultiplier: multiplier
+    };
+
+    setMealHistory(prev => {
+      const currentDayLog = prev[dateKey] || {
+        breakfast: [],
+        morningSnack: [],
+        lunch: [],
+        eveningSnack: [],
+        dinner: [],
+        water: 0
+      };
+      
+      const updatedSlot = [...(currentDayLog[slot] || []), loggedItem];
+      
+      return {
+        ...prev,
+        [dateKey]: {
+          ...currentDayLog,
+          [slot]: updatedSlot
+        }
+      };
+    });
+
+    // Add to recent foods
+    setRecentFoods(prev => {
+      const filtered = prev.filter(item => item.id !== food.id);
+      const updated = [
+        {
+          id: food.id || `custom_${Date.now()}`,
+          name: food.name,
+          category: food.category || 'Custom',
+          calories: Number(food.calories),
+          protein: Number(food.protein) || 0,
+          carbs: Number(food.carbs) || 0,
+          fats: Number(food.fats) || 0,
+          fiber: Number(food.fiber) || 0,
+          servingSize: Number(food.servingSize) || 100,
+          servingUnit: food.servingUnit || 'g'
+        },
+        ...filtered
+      ];
+      return updated.slice(0, 10);
+    });
+  };
+
+  const deleteFoodFromMeal = (slot: 'breakfast' | 'morningSnack' | 'lunch' | 'eveningSnack' | 'dinner', loggedId: string) => {
+    const dateKey = selectedMealDate;
+    setMealHistory(prev => {
+      const currentDayLog = prev[dateKey];
+      if (!currentDayLog) return prev;
+      
+      const updatedSlot = (currentDayLog[slot] || []).filter((item: any) => item.loggedId !== loggedId);
+      
+      return {
+        ...prev,
+        [dateKey]: {
+          ...currentDayLog,
+          [slot]: updatedSlot
+        }
+      };
+    });
+  };
+
+  // Helper to toggle favorites
+  const toggleFavoriteFood = (foodId: string) => {
+    setFavoriteFoods(prev => {
+      if (prev.includes(foodId)) {
+        return prev.filter(id => id !== foodId);
+      } else {
+        return [...prev, foodId];
+      }
+    });
+  };
 
   // Chatbot Coach state
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'coach'; text: string; time: string }>>([
@@ -2938,208 +3200,17 @@ export default function App() {
 
               {/* 1. DASHBOARD TAB */}
               {activeTab === 'dashboard' && (
-                <div id="app-dashboard" className="space-y-6 animate-in fade-in duration-200">
-                  
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    
-                    {/* Calorie Box */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between text-gray-500 mb-2">
-                          <span className="text-xs uppercase font-bold tracking-wider">Calorie Balance</span>
-                          <Flame size={18} className="text-[#00C853]" />
-                        </div>
-                        <p className="text-3xl font-black">{caloriesConsumed} <span className="text-sm font-normal text-gray-400">/ {userProfile.targetCalories} kcal</span></p>
-                        <div className="w-full bg-gray-100 h-2.5 mt-4 rounded-full overflow-hidden">
-                          <div className="bg-[#00C853] h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, (caloriesConsumed / userProfile.targetCalories) * 100)}%` }}></div>
-                        </div>
-                      </div>
-
-                      {/* Log Meal Form inline on dashboard */}
-                      <form onSubmit={handleLogQuickMeal} className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Log breakfast, lunch..."
-                          value={quickMealName}
-                          onChange={(e) => setQuickMealName(e.target.value)}
-                          className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 focus:outline-[#00C853]"
-                        />
-                        <input
-                          type="number"
-                          placeholder="kcal"
-                          value={quickMealCal}
-                          onChange={(e) => setQuickMealCal(e.target.value)}
-                          className="w-16 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-800 text-center focus:outline-[#00C853]"
-                        />
-                        <button
-                          type="submit"
-                          className="bg-[#00C853] hover:bg-[#00E676] text-white p-1.5 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Plus size={16} />
-                        </button>
-                      </form>
-                    </div>
-
-                    {/* Hydration Box */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between text-gray-500 mb-2">
-                          <span className="text-xs uppercase font-bold tracking-wider">Hydration Level</span>
-                          <Droplet size={18} className="text-cyan-500" />
-                        </div>
-                        <p className="text-3xl font-black">{hydrationConsumed}L <span className="text-sm font-normal text-gray-400">/ 2.5L</span></p>
-                        <div className="w-full bg-gray-100 h-2.5 mt-4 rounded-full overflow-hidden relative">
-                          <div className="bg-cyan-500 h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, (hydrationConsumed / 2.5) * 100)}%` }}></div>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handleDrinkWater}
-                        className="mt-4 w-full bg-cyan-50 hover:bg-cyan-100 text-cyan-600 font-bold py-2 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Plus size={14} /> Log 250ml Glass (0.25L)
-                      </button>
-                    </div>
-
-                    {/* Active Minutes Box */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between text-gray-500 mb-2">
-                          <span className="text-xs uppercase font-bold tracking-wider">Active Minutes</span>
-                          <Clock size={18} className="text-[#BFFF00] filter brightness-75" />
-                        </div>
-                        <p className="text-3xl font-black">{activeMinutes} <span className="text-sm font-normal text-gray-400">/ 60 mins</span></p>
-                        <div className="w-full bg-gray-100 h-2.5 mt-4 rounded-full overflow-hidden">
-                          <div className="bg-[#BFFF00] h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, (activeMinutes / 60) * 100)}%` }}></div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => handleStartWorkout(15)}
-                          className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 rounded-xl text-[11px] transition-colors cursor-pointer"
-                        >
-                          +15m Walk
-                        </button>
-                        <button
-                          onClick={() => handleStartWorkout(30)}
-                          className="bg-[#00C853]/10 hover:bg-[#00C853]/25 text-[#00C853] font-bold py-2 rounded-xl text-[11px] transition-colors cursor-pointer"
-                        >
-                          +30m Lift
-                        </button>
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* Layout content splitting: Custom Chart + Daily Food log list */}
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    
-                    {/* Activity Visualization Line Chart (100% custom SVG) */}
-                    <div className="lg:col-span-8 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="font-extrabold text-base text-gray-800">Energy & Weight Biometric Trend</h3>
-                          <p className="text-xs text-gray-400">Last 7 days metabolic and water data from Fitbit integration</p>
-                        </div>
-                        <div className="flex items-center gap-4 text-xs font-semibold text-gray-500">
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded bg-[#00C853]"></span> Target
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded bg-cyan-500"></span> Water (dl)
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Custom SVG Line Chart */}
-                      <div className="w-full h-56 relative">
-                        <svg viewBox="0 0 500 200" className="w-full h-full overflow-visible">
-                          {/* Grid Lines */}
-                          <line x1="0" y1="20" x2="500" y2="20" stroke="#f1f1f5" strokeWidth="1" />
-                          <line x1="0" y1="80" x2="500" y2="80" stroke="#f1f1f5" strokeWidth="1" />
-                          <line x1="0" y1="140" x2="500" y2="140" stroke="#f1f1f5" strokeWidth="1" />
-                          <line x1="0" y1="180" x2="500" y2="180" stroke="#f1f1f5" strokeWidth="1.5" />
-
-                          {/* SVG Path - Calorie Target Trend Line */}
-                          <path
-                            d="M 20,130 L 100,110 L 180,140 L 260,85 L 340,90 L 420,70 L 480,105"
-                            fill="none"
-                            stroke="#00C853"
-                            strokeWidth="3.5"
-                            strokeLinecap="round"
-                          />
-
-                          {/* SVG Path - Water log trend */}
-                          <path
-                            d="M 20,160 L 100,120 L 180,130 L 260,110 L 340,100 L 420,80 L 480,95"
-                            fill="none"
-                            stroke="#06b6d4"
-                            strokeWidth="2.5"
-                            strokeDasharray="4"
-                          />
-
-                          {/* Data points for visual premium touch */}
-                          <circle cx="20" cy="130" r="5" fill="#00C853" />
-                          <circle cx="100" cy="110" r="5" fill="#00C853" />
-                          <circle cx="180" cy="140" r="5" fill="#00C853" />
-                          <circle cx="260" cy="85" r="5" fill="#00C853" />
-                          <circle cx="340" cy="90" r="5" fill="#00C853" />
-                          <circle cx="420" cy="70" r="5" fill="#00C853" />
-                          <circle cx="480" cy="105" r="5" fill="#00C853" />
-
-                          {/* Labels */}
-                          <text x="20" y="195" fill="#a1a1aa" fontSize="10" textAnchor="middle" fontWeight="bold">Mon</text>
-                          <text x="100" y="195" fill="#a1a1aa" fontSize="10" textAnchor="middle" fontWeight="bold">Tue</text>
-                          <text x="180" y="195" fill="#a1a1aa" fontSize="10" textAnchor="middle" fontWeight="bold">Wed</text>
-                          <text x="260" y="195" fill="#a1a1aa" fontSize="10" textAnchor="middle" fontWeight="bold">Thu</text>
-                          <text x="340" y="195" fill="#a1a1aa" fontSize="10" textAnchor="middle" fontWeight="bold">Fri</text>
-                          <text x="420" y="195" fill="#a1a1aa" fontSize="10" textAnchor="middle" fontWeight="bold">Sat</text>
-                          <text x="480" y="195" fill="#a1a1aa" fontSize="10" textAnchor="middle" fontWeight="bold">Today</text>
-                        </svg>
-                      </div>
-                    </div>
-
-                    {/* Today's Logged Items List */}
-                    <div className="lg:col-span-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-extrabold text-base text-gray-800">Meal Logs Today</h3>
-                        <span className="text-[10px] bg-gray-100 text-gray-500 font-mono px-2 py-0.5 rounded uppercase">Fresh Daily</span>
-                      </div>
-
-                      <div className="space-y-3 flex-1 overflow-y-auto max-h-[190px] pr-1">
-                        {customMeals.length === 0 ? (
-                          <div className="flex-1 flex flex-col items-center justify-center text-center py-8 text-gray-400">
-                            <ChefHat size={32} className="opacity-40 mb-2" />
-                            <p className="text-xs">No meals logged yet today.</p>
-                          </div>
-                        ) : (
-                          customMeals.map((meal, idx) => (
-                            <div key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between text-xs">
-                              <div className="overflow-hidden">
-                                <p className="font-bold text-gray-800 truncate">{meal.name}</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{meal.time}</p>
-                              </div>
-                              <span className="font-black text-[#00C853] shrink-0">+{meal.cal} kcal</span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-gray-100 text-center">
-                        <button
-                          onClick={() => setActiveTab('meals')}
-                          className="text-xs font-bold text-[#00C853] hover:text-[#00E676] transition-colors flex items-center justify-center gap-1 mx-auto"
-                        >
-                          Access Meal Planner <ChevronRight size={14} />
-                        </button>
-                      </div>
-                    </div>
-
-                  </div>
-
-                </div>
+                <DashboardTab
+                  userProfile={userProfile}
+                  setUserProfile={setUserProfile}
+                  caloriesConsumed={caloriesConsumed}
+                  setCaloriesConsumed={setCaloriesConsumed}
+                  hydrationConsumed={hydrationConsumed}
+                  setHydrationConsumed={setHydrationConsumed}
+                  activeMinutes={activeMinutes}
+                  setActiveMinutes={setActiveMinutes}
+                  setActiveTab={setActiveTab}
+                />
               )}
 
               {/* 2. WORKOUTS TAB */}
@@ -3850,277 +3921,19 @@ export default function App() {
 
               {/* 3. MEALS TAB */}
               {activeTab === 'meals' && (
-                <div id="app-meals" className="space-y-6 animate-in fade-in duration-200">
-                  <div>
-                    <h2 className="text-xl font-extrabold text-gray-800">Nutritional Command</h2>
-                    <p className="text-xs text-gray-500">Calculate calorie density and generate custom, micro-balanced recipes</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    
-                    {/* Placeholder 1: Meal Plan Generator */}
-                    <div className="lg:col-span-6 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-extrabold text-base text-gray-800 flex items-center gap-2">
-                          <ChefHat size={18} className="text-[#00C853]" />
-                          AI Meal Plan Generator
-                        </h3>
-                        <span className="text-[10px] font-mono font-bold bg-[#00C853]/15 text-[#00C853] px-2 py-0.5 rounded uppercase">Macros</span>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Select Dietary Target</label>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {['Balanced', 'Gain Muscle', 'Ketogenic', 'Fat Loss'].map((goal) => (
-                              <button
-                                key={goal}
-                                onClick={() => setMealDietGoal(goal)}
-                                className={`py-2 px-1 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${mealDietGoal === goal ? 'bg-[#00C853] text-white shadow-sm' : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'}`}
-                              >
-                                {goal}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {mealGeneratorStatus === 'idle' && (
-                          <div className="text-center py-8 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
-                            <button
-                              onClick={generateMealPlan}
-                              className="bg-[#00C853] hover:bg-[#00E676] text-white font-bold text-xs py-3 px-6 rounded-xl shadow-sm transition-all cursor-pointer"
-                            >
-                              Generate Customized Daily Intake Plan
-                            </button>
-                          </div>
-                        )}
-
-                        {mealGeneratorStatus === 'generating' && (
-                          <div className="text-center py-10 space-y-3">
-                            <div className="w-8 h-8 rounded-full border-2 border-[#00C853] border-t-transparent animate-spin mx-auto"></div>
-                            <p className="text-xs font-medium text-gray-500">AI assembling specialized nutrition macros...</p>
-                          </div>
-                        )}
-
-                        {mealGeneratorStatus === 'ready' && generatedMealPlan && (
-                          <div className="space-y-4 pt-2 animate-in fade-in">
-                            <div className="bg-[#00C853]/5 p-4 rounded-xl border border-[#00C853]/15 grid grid-cols-3 gap-2 text-center">
-                              <div>
-                                <p className="text-[10px] uppercase text-gray-400 font-bold">Protein</p>
-                                <p className="text-base font-black text-gray-800 mt-0.5">{generatedMealPlan.macros.p}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase text-gray-400 font-bold">Carbs</p>
-                                <p className="text-base font-black text-gray-800 mt-0.5">{generatedMealPlan.macros.c}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase text-gray-400 font-bold">Fats</p>
-                                <p className="text-base font-black text-gray-800 mt-0.5">{generatedMealPlan.macros.f}</p>
-                              </div>
-                            </div>
-
-                            <div className="space-y-3 text-xs">
-                              <div className="flex items-start gap-3">
-                                <span className="font-bold text-[#00C853] uppercase min-w-[50px] pt-0.5">B-Fast:</span>
-                                <span className="text-gray-700 leading-relaxed">{generatedMealPlan.b}</span>
-                              </div>
-                              <div className="flex items-start gap-3">
-                                <span className="font-bold text-[#00C853] uppercase min-w-[50px] pt-0.5">Lunch:</span>
-                                <span className="text-gray-700 leading-relaxed">{generatedMealPlan.l}</span>
-                              </div>
-                              <div className="flex items-start gap-3">
-                                <span className="font-bold text-[#00C853] uppercase min-w-[50px] pt-0.5">Snack:</span>
-                                <span className="text-gray-700 leading-relaxed">{generatedMealPlan.s}</span>
-                              </div>
-                              <div className="flex items-start gap-3">
-                                <span className="font-bold text-[#00C853] uppercase min-w-[50px] pt-0.5">Dinner:</span>
-                                <span className="text-gray-700 leading-relaxed">{generatedMealPlan.d}</span>
-                              </div>
-                            </div>
-
-                            <button
-                              onClick={() => { setMealGeneratorStatus('idle'); setGeneratedMealPlan(null); }}
-                              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs py-2 rounded-xl transition-colors cursor-pointer"
-                            >
-                              Reset Plan
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Placeholder 2: Nutrition Analysis Scanner */}
-                    <div className="lg:col-span-6 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-extrabold text-base text-gray-800 flex items-center gap-2">
-                          <Camera size={18} className="text-[#00C853]" />
-                          AI Nutrition Scanner
-                        </h3>
-                        <span className="text-[10px] font-mono font-bold bg-[#BFFF00]/15 text-[#BFFF00] filter brightness-75 px-2 py-0.5 rounded uppercase">Simulated Lens</span>
-                      </div>
-
-                      <div className="space-y-4">
-                        <form onSubmit={analyzeMealText} className="space-y-3">
-                          <label className="block text-xs font-bold text-gray-500 uppercase">Describe Your Meal</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder="e.g., 2 egg omelette with cheddar cheese & coffee"
-                              value={mealInput}
-                              onChange={(e) => setMealInput(e.target.value)}
-                              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
-                            />
-                            <button
-                              type="submit"
-                              className="bg-[#00C853] hover:bg-[#00E676] text-white font-bold text-xs px-4 rounded-xl flex items-center justify-center cursor-pointer"
-                            >
-                              Analyze
-                            </button>
-                          </div>
-                        </form>
-
-                        {scanningStatus === 'scanning' && (
-                          <div className="text-center py-10 space-y-3 bg-gray-50 rounded-2xl">
-                            <div className="w-8 h-8 rounded-full border-2 border-[#00C853] border-t-transparent animate-spin mx-auto"></div>
-                            <p className="text-xs font-medium text-gray-500">AI scanning plate details & assessing density...</p>
-                          </div>
-                        )}
-
-                        {scanningStatus === 'ready' && scannedResult && (
-                          <div className="bg-gray-50 border border-gray-100 p-4 rounded-2xl space-y-4 animate-in fade-in">
-                            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-                              <div>
-                                <h4 className="text-xs font-bold text-gray-800 truncate max-w-[200px]">{scannedResult.name}</h4>
-                                <span className="text-[10px] text-gray-400 font-mono">Calorie Density: {scannedResult.cal} kcal</span>
-                              </div>
-                              <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${scannedResult.rating === 'A' ? 'bg-[#00C853]/15 text-[#00C853]' : scannedResult.rating === 'B' ? 'bg-amber-500/15 text-amber-500' : 'bg-red-500/15 text-red-500'}`}>
-                                {scannedResult.rating}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                              <div className="bg-white p-2.5 rounded-xl border border-gray-150">
-                                <p className="text-[9px] uppercase text-gray-400 font-semibold">Protein</p>
-                                <p className="font-bold text-gray-800 mt-0.5">{scannedResult.p}</p>
-                              </div>
-                              <div className="bg-white p-2.5 rounded-xl border border-gray-150">
-                                <p className="text-[9px] uppercase text-gray-400 font-semibold">Carbs</p>
-                                <p className="font-bold text-gray-800 mt-0.5">{scannedResult.c}</p>
-                              </div>
-                              <div className="bg-white p-2.5 rounded-xl border border-gray-150">
-                                <p className="text-[9px] uppercase text-gray-400 font-semibold">Fats</p>
-                                <p className="font-bold text-gray-800 mt-0.5">{scannedResult.f}</p>
-                              </div>
-                            </div>
-
-                            <p className="text-[11px] text-gray-500 leading-relaxed bg-white p-3 rounded-xl border border-gray-150">
-                              <span className="font-bold text-[#00C853]">Insight:</span> {scannedResult.tip}
-                            </p>
-
-                            <button
-                              onClick={handleAddScannedToCal}
-                              className="w-full bg-[#00C853] hover:bg-[#00E676] text-white font-bold text-xs py-3 rounded-xl shadow-sm transition-colors cursor-pointer"
-                            >
-                              Add to Today's Calorie Log
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
+                <MealsTab
+                  userProfile={userProfile}
+                  setCaloriesConsumed={setCaloriesConsumed}
+                  setHydrationConsumed={setHydrationConsumed}
+                />
               )}
 
               {/* 4. AI COACH TAB */}
               {activeTab === 'coach' && (
-                <div id="app-coach" className="h-[calc(100vh-140px)] min-h-[480px] flex flex-col bg-[#1A1A2E] text-white rounded-3xl p-4 md:p-6 shadow-2xl relative overflow-hidden animate-in fade-in duration-200">
-                  <div className="absolute -top-40 -left-40 w-80 h-80 bg-[#00C853]/5 rounded-full blur-3xl"></div>
-                  <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-[#BFFF00]/5 rounded-full blur-3xl"></div>
-
-                  {/* Coach Chat Header */}
-                  <div className="flex items-center justify-between pb-4 border-b border-white/10 z-10 shrink-0">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#00C853] to-[#BFFF00] flex items-center justify-center font-bold text-black text-sm uppercase">
-                          AI
-                        </div>
-                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#00C853] border-2 border-[#1A1A2E] animate-ping"></span>
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-base text-white">AI Performance Coach</h4>
-                        <p className="text-[10px] text-gray-400 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#00C853]"></span> Synced with Fitbit & Goals
-                        </p>
-                      </div>
-                    </div>
-                    <span className="hidden sm:inline-block px-3 py-1 bg-white/10 rounded-full text-[10px] uppercase font-mono tracking-wider text-gray-400">
-                      GPT-4 Dynamic Model
-                    </span>
-                  </div>
-
-                  {/* Quick preset buttons */}
-                  <div className="flex gap-2 py-3 overflow-x-auto shrink-0 z-10 no-scrollbar">
-                    {COACH_QUICK_PROMPTS.map((prompt, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSendCoachMsg(prompt)}
-                        className="bg-white/5 border border-white/10 text-[11px] text-gray-300 px-3.5 py-1.5 rounded-full hover:bg-white/10 hover:border-[#00C853]/50 transition-colors shrink-0 cursor-pointer"
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Messages box */}
-                  <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-1 scroll-smooth z-10">
-                    {chatMessages.map((msg, idx) => (
-                      <div
-                        key={idx}
-                        className={`flex flex-col max-w-[85%] ${msg.sender === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'}`}
-                      >
-                        <div className={`p-4 rounded-2xl text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-[#00C853] text-white rounded-br-none' : 'bg-white/5 border border-white/10 text-gray-200 rounded-bl-none'}`}>
-                          <p className="whitespace-pre-line">{msg.text}</p>
-                        </div>
-                        <span className="text-[9px] text-gray-500 mt-1 font-mono tracking-wider">{msg.time}</span>
-                      </div>
-                    ))}
-
-                    {coachIsThinking && (
-                      <div className="flex flex-col items-start mr-auto max-w-[85%]">
-                        <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 text-xs rounded-bl-none flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 bg-[#00C853] rounded-full animate-bounce"></div>
-                          <div className="w-1.5 h-1.5 bg-[#00C853] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                          <div className="w-1.5 h-1.5 bg-[#00C853] rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={chatBottomRef} />
-                  </div>
-
-                  {/* Chat input form */}
-                  <div className="pt-4 border-t border-white/10 z-10 shrink-0">
-                    <form
-                      onSubmit={(e) => { e.preventDefault(); handleSendCoachMsg(); }}
-                      className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-2xl p-2 focus-within:border-[#00C853]"
-                    >
-                      <input
-                        type="text"
-                        placeholder="Ask your coach anything about metrics or exercises..."
-                        value={chatInputText}
-                        onChange={(e) => setChatInputText(e.target.value)}
-                        className="flex-1 bg-transparent border-0 outline-none px-3.5 py-2 text-xs text-white placeholder-gray-500 focus:ring-0"
-                      />
-                      <button
-                        type="submit"
-                        className="bg-[#00C853] hover:bg-[#00E676] text-black font-bold p-2.5 rounded-xl transition-colors cursor-pointer"
-                      >
-                        <ChevronRight size={18} strokeWidth={3.5} />
-                      </button>
-                    </form>
-                  </div>
-
-                </div>
+                <CoachTab 
+                  userProfile={userProfile} 
+                  setActiveTab={setActiveTab} 
+                />
               )}
 
               {/* 5. PROFILE TAB */}
@@ -4175,69 +3988,124 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* Interactive Biometrics form */}
-                    <div className="lg:col-span-8 bg-white rounded-3xl p-6 shadow-md border border-gray-100 space-y-6">
-                      <div className="border-b border-gray-100 pb-4">
-                        <h3 className="font-extrabold text-base text-gray-800">Biometric Calibrations</h3>
-                        <p className="text-xs text-gray-400">Updating height/weight dynamically triggers recalculations of daily metabolic limits.</p>
+                    {/* Interactive Biometrics form & Gemini Configuration */}
+                    <div className="lg:col-span-8 space-y-6">
+                      
+                      <div className="bg-white rounded-3xl p-6 shadow-md border border-gray-100 space-y-6">
+                        <div className="border-b border-gray-100 pb-4">
+                          <h3 className="font-extrabold text-base text-gray-800">Biometric Calibrations</h3>
+                          <p className="text-xs text-gray-400">Updating height/weight dynamically triggers recalculations of daily metabolic limits.</p>
+                        </div>
+
+                        <form onSubmit={handleProfileUpdate} className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Full Name</label>
+                              <input
+                                type="text"
+                                value={userProfile.name}
+                                onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Email Address</label>
+                              <input
+                                type="email"
+                                value={userProfile.email}
+                                onChange={(e) => setUserProfile({ ...userProfile, email: e.target.value })}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Height (cm)</label>
+                              <input
+                                type="number"
+                                value={userProfile.height}
+                                onChange={(e) => setUserProfile({ ...userProfile, height: parseInt(e.target.value) || 0 })}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Weight (kg)</label>
+                              <input
+                                type="number"
+                                value={userProfile.weight}
+                                onChange={(e) => setUserProfile({ ...userProfile, weight: parseFloat(e.target.value) || 0 })}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="bg-gray-50 p-4 rounded-xl border border-gray-100/80 flex items-start gap-3">
+                            <span className="text-[#00C853] mt-0.5"><Info size={16} /></span>
+                            <div className="text-[11px] text-gray-500 leading-relaxed">
+                              <strong className="text-gray-700">Dynamic Calculation logic:</strong> Given your weight ({userProfile.weight} kg) and height ({userProfile.height} cm), your active basal metabolic weight index equals <strong className="text-gray-700">{bmiValue} ({bmiStatus.text})</strong>. Your target intake budget is auto-generated based on the updated metabolic parameters.
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end">
+                            <button
+                              type="submit"
+                              className="bg-[#00C853] hover:bg-[#00E676] text-white font-bold text-xs py-3.5 px-6 rounded-xl shadow-md transition-all cursor-pointer"
+                            >
+                              Save Biometrics & Recalibrate Targets
+                            </button>
+                          </div>
+                        </form>
                       </div>
 
-                      <form onSubmit={handleProfileUpdate} className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Gemini API Settings Card */}
+                      <div className="bg-white rounded-3xl p-6 shadow-md border border-gray-100 space-y-4">
+                        <div className="border-b border-gray-100 pb-3 flex items-center gap-2">
+                          <Sparkles size={18} className="text-[#00C853]" />
                           <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Full Name</label>
-                            <input
-                              type="text"
-                              value={userProfile.name}
-                              onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
-                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Email Address</label>
-                            <input
-                              type="email"
-                              value={userProfile.email}
-                              onChange={(e) => setUserProfile({ ...userProfile, email: e.target.value })}
-                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Height (cm)</label>
-                            <input
-                              type="number"
-                              value={userProfile.height}
-                              onChange={(e) => setUserProfile({ ...userProfile, height: parseInt(e.target.value) || 0 })}
-                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Weight (kg)</label>
-                            <input
-                              type="number"
-                              value={userProfile.weight}
-                              onChange={(e) => setUserProfile({ ...userProfile, weight: parseFloat(e.target.value) || 0 })}
-                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
-                            />
+                            <h3 className="font-extrabold text-base text-gray-800">Gemini API Settings</h3>
+                            <p className="text-xs text-gray-400">Add your Gemini API key to enable professional AI health coaching.</p>
                           </div>
                         </div>
+                        
+                        <div className="space-y-3.5">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Gemini API Key</label>
+                            <div className="flex flex-col sm:flex-row gap-2.5">
+                              <input
+                                type="password"
+                                placeholder="AIzaSy..."
+                                value={geminiApiKey}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setGeminiApiKey(val);
+                                  localStorage.setItem('geminiApiKey', val);
+                                }}
+                                className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-3 text-xs text-gray-800 focus:outline-[#00C853]"
+                              />
+                              <button
+                                type="button"
+                                disabled={!geminiApiKey.trim() || testingKey}
+                                onClick={handleTestConnection}
+                                className="bg-[#00C853] hover:bg-[#00E676] disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold text-xs py-3 px-5 rounded-xl transition-all shadow-sm cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5"
+                              >
+                                {testingKey ? 'Testing...' : 'Test Connection'}
+                              </button>
+                            </div>
+                          </div>
 
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100/80 flex items-start gap-3">
-                          <span className="text-[#00C853] mt-0.5"><Info size={16} /></span>
-                          <div className="text-[11px] text-gray-500 leading-relaxed">
-                            <strong className="text-gray-700">Dynamic Calculation logic:</strong> Given your weight ({userProfile.weight} kg) and height ({userProfile.height} cm), your active basal metabolic weight index equals <strong className="text-gray-700">{bmiValue} ({bmiStatus.text})</strong>. Your target intake budget is auto-generated based on the updated metabolic parameters.
-                          </div>
+                          {testStatus && (
+                            <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
+                              testStatus.type === 'success' 
+                                ? 'bg-green-50 text-green-700 border-green-200' 
+                                : 'bg-red-50 text-red-700 border-red-200'
+                            }`}>
+                              <span className={testStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}>
+                                {testStatus.type === 'success' ? '✓' : '✗'}
+                              </span>
+                              <span>{testStatus.message}</span>
+                            </div>
+                          )}
                         </div>
+                      </div>
 
-                        <div className="flex justify-end">
-                          <button
-                            type="submit"
-                            className="bg-[#00C853] hover:bg-[#00E676] text-white font-bold text-xs py-3.5 px-6 rounded-xl shadow-md transition-all cursor-pointer"
-                          >
-                            Save Biometrics & Recalibrate Targets
-                          </button>
-                        </div>
-                      </form>
                     </div>
 
                   </div>
