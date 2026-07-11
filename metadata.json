@@ -1,0 +1,6 @@
+{
+  "name": "HealthifyYou",
+  "description": "An AI-powered health and fitness companion with personalized workouts, intelligent meal tracking, real-time metabolic analytics, and interactive coaching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

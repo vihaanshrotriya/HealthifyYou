@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Poppins", sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom modern scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1A1A2E;
+}
+::-webkit-scrollbar-thumb {
+  background: #00C853;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #BFFF00;
+}
+
+/* Exercise CSS animations */
+@keyframes pushup {
+  0%, 100% {
+    transform: translateY(0) rotate(15deg);
+  }
+  50% {
+    transform: translateY(24px) rotate(10deg);
+  }
+}
+
+@keyframes squat {
+  0%, 100% {
+    transform: scaleY(1) translateY(0);
+  }
+  50% {
+    transform: scaleY(0.55) translateY(20px);
+  }
+}
+
+@keyframes cardio {
+  0%, 100% {
+    transform: translateY(0) scaleX(1);
+  }
+  25% {
+    transform: translateY(-15px) scaleX(0.95) rotate(5deg);
+  }
+  50% {
+    transform: translateY(0) scaleX(1.05);
+  }
+  75% {
+    transform: translateY(-15px) scaleX(0.95) rotate(-5deg);
+  }
+}
+
+@keyframes yogaPulse {
+  0%, 100% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.95;
+  }
+}
+
+@keyframes hiitFlame {
+  0%, 100% {
+    transform: scale(1) skewX(0deg);
+    filter: drop-shadow(0 0 5px rgba(0,200,83,0.5));
+  }
+  25% {
+    transform: scale(1.1) skewX(4deg);
+    filter: drop-shadow(0 0 15px rgba(0,200,83,0.8));
+  }
+  50% {
+    transform: scale(0.95) skewX(-4deg);
+    filter: drop-shadow(0 0 8px rgba(191,255,0,0.6));
+  }
+  75% {
+    transform: scale(1.05) skewX(2deg);
+    filter: drop-shadow(0 0 12px rgba(0,200,83,0.7));
+  }
+}
+
+.animate-pushup {
+  animation: pushup 2s ease-in-out infinite;
+}
+
+.animate-squat {
+  animation: squat 1.8s ease-in-out infinite;
+}
+
+.animate-cardio {
+  animation: cardio 0.8s ease-in-out infinite;
+}
+
+.animate-yoga-pulse {
+  animation: yogaPulse 4s ease-in-out infinite;
+}
+
+.animate-hiit-flame {
+  animation: hiitFlame 1.2s ease-in-out infinite;
+}
+
+
